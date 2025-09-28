@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ideenbörse - Gymnasium Neusiedl am See</title>
+    <!-- Oswald Font Einbindung -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+    <header class="site-header">
+            <div class="header-text">
+              <h1>Ideenbörse</h1>
+              <p>Teile deine Verbesserungsvorschläge für das Gymnasium Neusiedl am See</p>
+            </div>
+            <div class="logo-wrap" aria-hidden="true"><img src="logo.svg" alt="Schullogo" class="site-logo"></div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="progress-steps" aria-label="Ablauf Einsenden">
+            <div class="step active" data-step="1">
+                <span class="circle">1</span>
+                <span class="label">Idee einreichen</span>
+            </div>
+            <div class="step locked" data-step="2">
+                <span class="circle">2</span>
+                <span class="label">Verifizieren</span>
+            </div>
+            <div class="step locked" data-step="3">
+                <span class="circle">3</span>
+                <span class="label">Fertig</span>
+            </div>
+            <div class="step admin-link">
+                <a href="admin.html" class="admin-nav-link" title="Adminbereich">Admin</a>
+            </div>
+        </nav>
+
+        <!-- Idee einreichen Tab -->
+    <div id="submit-idea" class="tab-section">
+            <div class="card">
+                <h2>Neue Idee einreichen</h2>
+                <form id="idea-form">
+                    <div class="form-group">
+                        <label for="idea-title">Titel deiner Idee:</label>
+                        <input type="text" id="idea-title" required maxlength="100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="idea-description">Beschreibung:</label>
+                        <textarea id="idea-description" required maxlength="1000" rows="5"></textarea>
+                        <small>Maximal 1000 Zeichen</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="idea-category">Kategorie:</label>
+                        <select id="idea-category" required>
+                            <option value="">Bitte wählen...</option>
+                            <option value="Unterricht">Unterricht</option>
+                            <option value="Schulgebäude">Schulgebäude</option>
+                            <option value="Cafeteria">Cafeteria</option>
+                            <option value="Sport">Sport</option>
+                            <option value="Veranstaltungen">Veranstaltungen</option>
+                            <option value="Digitalisierung">Digitalisierung</option>
+                            <option value="Sonstiges">Sonstiges</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Verifizieren & Absenden</button>
+                </form>
+            </div>
+        </div>
+        <!-- E-Mail Verifizierung Modal -->
+        <div id="email-modal" class="modal">
+            <div class="modal-content">
+                <h3>E-Mail Verifizierung</h3>
+                <p>Um Spam zu vermeiden, benötigen wir deine Schul-E-Mail-Adresse:</p>
+                
+                <div id="email-step" class="verification-step">
+                    <div class="form-group">
+                        <label for="user-email">Deine @gym-nd.at E-Mail:</label>
+                        <input type="email" id="user-email" placeholder="vorname.nachname@gym-nd.at" required>
+                    </div>
+                    <button onclick="sendVerificationCode()" class="btn btn-primary">Code senden</button>
+                </div>
+                
+                <div id="code-step" class="verification-step" style="display: none;">
+                    <p>Ein Verifizierungscode wurde an deine E-Mail gesendet.</p>
+                    <div class="form-group">
+                        <label for="verification-code">Verifizierungscode:</label>
+                        <input type="text" id="verification-code" placeholder="6-stelliger Code" maxlength="6" required>
+                    </div>
+                    <button onclick="verifyCode()" class="btn btn-primary">Idee einreichen</button>
+                </div>
+                
+                <button onclick="closeModal()" class="btn btn-danger modal-cancel-btn">Abbrechen</button>
+            </div>
+        </div>
+
+
+        <!-- Admin Login Tab -->
+        <!-- Admin ausgelagert -->
+    </div>
+
+    <!-- Success/Error Messages -->
+    <div id="message-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
