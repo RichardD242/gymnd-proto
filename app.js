@@ -60,19 +60,81 @@ function sendVerificationCode() {
         showMessage('Bitte verwende deine @gym-nd.at E-Mail-Adresse.', 'error');
         return;
     }
+    const btn = document.getElementById('send-code-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     localStorage.setItem('verificationCode', code);
     localStorage.setItem('verificationEmail', email);
+    // Optional: Ablaufzeit (z.B. 10 Minuten) speichern – kann später geprüft werden
+    localStorage.setItem('verificationCodeExpiry', String(Date.now() + 10*60*1000));
     document.getElementById('email-step').style.display = 'none';
     document.getElementById('code-step').style.display = 'block';
-    console.log(`Verifizierungscode für ${email}: ${code}`);
-    showMessage(`Code wurde an ${email} gesendet. (Demo: ${code})`, 'success');
+        // E-Mail Versand
+        if (window.EmailService && EmailService.isConfigured()) {
+                                                EmailService.sendVerificationEmail(email, code)
+                                                    .then(() => {
+                                                        showMessage(`Code wurde an ${email} gesendet.`, 'success');
+                                                    })
+                                                    .catch(err => {
+                                                        console.warn('E-Mail Versand fehlgeschlagen:', err);
+                                                        const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
+                                                        let msg = raw || 'Bitte später erneut versuchen.';
+                                                        if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
+                                                            msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
+                                                        }
+                                                        showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
+                                                    })
+                                    .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } });
+        } else {
+                console.log(`[DEV] E-Mail Dienst nicht konfiguriert. Code: ${code}`);
+                showMessage(`(Entwickler-Modus) Code: ${code}`, 'success');
+                                if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; }
+        }
+}
+
+function resendVerificationCode(){
+        const email = localStorage.getItem('verificationEmail') || document.getElementById('user-email')?.value.trim();
+        if (!email || !email.endsWith('@gym-nd.at')) {
+                showMessage('Bitte verwende deine @gym-nd.at E-Mail-Adresse.', 'error');
+                return;
+        }
+        const btn = document.getElementById('resend-code-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        localStorage.setItem('verificationCode', code);
+        localStorage.setItem('verificationEmail', email);
+        localStorage.setItem('verificationCodeExpiry', String(Date.now() + 10*60*1000));
+            if (window.EmailService && EmailService.isConfigured()) {
+                EmailService.sendVerificationEmail(email, code)
+                        .then(()=>{
+                        showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success');
+                    })
+                        .catch(err=>{
+                            console.warn('E-Mail Versand fehlgeschlagen (resend):', err);
+                            const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
+                            let msg = raw || 'Bitte später erneut versuchen.';
+                            if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
+                                msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
+                            }
+                            showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
+                    })
+                    .finally(()=>{ if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; } });
+        } else {
+                console.log('[DEV] Resend – E-Mail Dienst nicht konfiguriert. Code:', code);
+                showMessage(`(Entwickler-Modus) Neuer Code: ${code}`, 'success');
+                if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
+        }
 }
 
 function verifyCode() {
     const enteredCode = document.getElementById('verification-code').value.trim();
     const storedCode = localStorage.getItem('verificationCode');
     const email = localStorage.getItem('verificationEmail');
+    const expiry = parseInt(localStorage.getItem('verificationCodeExpiry')||'0',10);
+    if (expiry && Date.now() > expiry) {
+        showMessage('Der Verifizierungscode ist abgelaufen. Bitte fordere einen neuen Code an.', 'error');
+        return;
+    }
     if (enteredCode !== storedCode) {
         showMessage('Ungültiger Verifizierungscode.', 'error');
         return;
@@ -81,6 +143,7 @@ function verifyCode() {
     saveIdea(currentIdea);
     localStorage.removeItem('verificationCode');
     localStorage.removeItem('verificationEmail');
+    localStorage.removeItem('verificationCodeExpiry');
     closeModal();
     document.getElementById('idea-form').reset();
     currentIdea = null;

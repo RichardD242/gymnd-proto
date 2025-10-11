@@ -9,6 +9,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <!-- EmailJS SDK für client-seitigen Versand -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <!-- E-Mail Konfiguration und Service -->
+    <script src="email.config.js"></script>
+    <script src="email.js"></script>
 </head>
 <body>
     <div class="container">
@@ -84,7 +89,7 @@
                         <label for="user-email">Deine @gym-nd.at E-Mail:</label>
                         <input type="email" id="user-email" placeholder="vorname.nachname@gym-nd.at" required>
                     </div>
-                    <button onclick="sendVerificationCode()" class="btn btn-primary">Code senden</button>
+                    <button id="send-code-btn" onclick="sendVerificationCode()" class="btn btn-primary">Code senden</button>
                 </div>
                 
                 <div id="code-step" class="verification-step" style="display: none;">
@@ -93,7 +98,10 @@
                         <label for="verification-code">Verifizierungscode:</label>
                         <input type="text" id="verification-code" placeholder="6-stelliger Code" maxlength="6" required>
                     </div>
-                    <button onclick="verifyCode()" class="btn btn-primary">Idee einreichen</button>
+                    <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+                      <button onclick="verifyCode()" class="btn btn-primary">Idee einreichen</button>
+                      <button id="resend-code-btn" onclick="resendVerificationCode()" class="btn btn-secondary" type="button">Code erneut senden</button>
+                    </div>
                 </div>
                 
                 <button onclick="closeModal()" class="btn btn-danger modal-cancel-btn">Abbrechen</button>
