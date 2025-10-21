@@ -9,11 +9,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" sizes="32x32" href="https://www.gymnasium-neusiedl.at/wp-content/uploads/2024/02/cropped-favicon-32x32.png">
     <!-- EmailJS SDK für client-seitigen Versand -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <!-- E-Mail Konfiguration und Service -->
     <script src="email.config.js"></script>
     <script src="email.js"></script>
+    <!-- Optional: Backend API Config -->
+    <script src="api.config.js"></script>
 </head>
 <body>
     <div class="container">
@@ -61,17 +64,13 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="idea-category">Kategorie:</label>
-                        <select id="idea-category" required>
-                            <option value="">Bitte wählen...</option>
-                            <option value="Unterricht">Unterricht</option>
-                            <option value="Schulgebäude">Schulgebäude</option>
-                            <option value="Cafeteria">Cafeteria</option>
-                            <option value="Sport">Sport</option>
-                            <option value="Veranstaltungen">Veranstaltungen</option>
-                            <option value="Digitalisierung">Digitalisierung</option>
-                            <option value="Sonstiges">Sonstiges</option>
-                        </select>
+                        <span style="display:block;font-size: var(--fs-xs); font-weight:600; letter-spacing:1px; text-transform:uppercase; color: var(--color-text-fade); margin-bottom:.4rem;">Kategorie:</span>
+                        <div class="radio-row">
+                          <label class="radio-chip"><input type="radio" name="idea-category" value="Anliegen" required><span>Anliegen</span></label>
+                          <label class="radio-chip"><input type="radio" name="idea-category" value="Beschwerde" required><span>Beschwerde</span></label>
+                          <label class="radio-chip"><input type="radio" name="idea-category" value="Vorschlag" required><span>Vorschlag</span></label>
+                          <label class="radio-chip"><input type="radio" name="idea-category" value="Feedback" required><span>Feedback</span></label>
+                        </div>
                     </div>
                     
                     <button type="submit" class="btn btn-primary">Verifizieren & Absenden</button>
@@ -98,7 +97,7 @@
                         <label for="verification-code">Verifizierungscode:</label>
                         <input type="text" id="verification-code" placeholder="6-stelliger Code" maxlength="6" required>
                     </div>
-                    <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+                                                            <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
                       <button onclick="verifyCode()" class="btn btn-primary">Idee einreichen</button>
                       <button id="resend-code-btn" onclick="resendVerificationCode()" class="btn btn-secondary" type="button">Code erneut senden</button>
                     </div>

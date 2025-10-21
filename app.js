@@ -1,5 +1,6 @@
 let currentIdea = null;
 let isAdmin = false;
+let resendCooldownTimer = null;
 
 const ADMIN_CREDENTIALS = {
     username: 'admin',
@@ -37,7 +38,8 @@ function handleIdeaSubmit(e) {
     e.preventDefault();
     const title = document.getElementById('idea-title').value.trim();
     const description = document.getElementById('idea-description').value.trim();
-    const category = document.getElementById('idea-category').value;
+    const categoryEl = document.querySelector('input[name="idea-category"]:checked');
+    const category = categoryEl ? categoryEl.value : '';
     if (!title || !description || !category) {
         showMessage('Bitte fülle alle Felder aus.', 'error');
         return;
@@ -62,34 +64,49 @@ function sendVerificationCode() {
     }
     const btn = document.getElementById('send-code-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
+    const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
+    if (api) {
+        fetch(`${api}/verification/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        }).then(async resp => {
+            if (!resp.ok) throw new Error((await resp.json()).error || 'Fehler');
+            localStorage.setItem('verificationEmail', email);
+            document.getElementById('email-step').style.display = 'none';
+            document.getElementById('code-step').style.display = 'block';
+            applyResendCooldownState();
+            showMessage(`Code wurde an ${email} gesendet.`, 'success');
+        }).catch(err => {
+            showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message || err}`, 'error');
+        }).finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } });
+        return;
+    }
+    // Fallback: alter Frontend-Weg
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     localStorage.setItem('verificationCode', code);
     localStorage.setItem('verificationEmail', email);
-    // Optional: Ablaufzeit (z.B. 10 Minuten) speichern – kann später geprüft werden
     localStorage.setItem('verificationCodeExpiry', String(Date.now() + 10*60*1000));
     document.getElementById('email-step').style.display = 'none';
     document.getElementById('code-step').style.display = 'block';
-        // E-Mail Versand
-        if (window.EmailService && EmailService.isConfigured()) {
-                                                EmailService.sendVerificationEmail(email, code)
-                                                    .then(() => {
-                                                        showMessage(`Code wurde an ${email} gesendet.`, 'success');
-                                                    })
-                                                    .catch(err => {
-                                                        console.warn('E-Mail Versand fehlgeschlagen:', err);
-                                                        const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
-                                                        let msg = raw || 'Bitte später erneut versuchen.';
-                                                        if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
-                                                            msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
-                                                        }
-                                                        showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
-                                                    })
-                                    .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } });
-        } else {
-                console.log(`[DEV] E-Mail Dienst nicht konfiguriert. Code: ${code}`);
-                showMessage(`(Entwickler-Modus) Code: ${code}`, 'success');
-                                if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; }
-        }
+    applyResendCooldownState();
+    if (window.EmailService && EmailService.isConfigured()) {
+        EmailService.sendVerificationEmail(email, code)
+            .then(() => showMessage(`Code wurde an ${email} gesendet.`, 'success'))
+            .catch(err => {
+                const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
+                let msg = raw || 'Bitte später erneut versuchen.';
+                if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
+                    msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
+                }
+                showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
+            })
+            .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } });
+    } else {
+        console.log(`[DEV] E-Mail Dienst nicht konfiguriert. Code: ${code}`);
+        showMessage(`(Entwickler-Modus) Code: ${code}`, 'success');
+        if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; }
+    }
 }
 
 function resendVerificationCode(){
@@ -100,36 +117,112 @@ function resendVerificationCode(){
         }
         const btn = document.getElementById('resend-code-btn');
         if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
+        // Starte Cooldown sofort, um Spam zu vermeiden
+        startResendCooldown(30);
+        const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
+        if (api) {
+            fetch(`${api}/verification/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            }).then(async resp => {
+                if (!resp.ok) throw new Error((await resp.json()).error || 'Fehler');
+                showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success');
+            }).catch(err => {
+                showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message || err}`, 'error');
+                clearResendCooldown();
+                if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
+            }).finally(() => { /* Button wird vom Cooldown gesteuert */ });
+            return;
+        }
+        // Fallback: Frontend-Resend
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         localStorage.setItem('verificationCode', code);
         localStorage.setItem('verificationEmail', email);
         localStorage.setItem('verificationCodeExpiry', String(Date.now() + 10*60*1000));
-            if (window.EmailService && EmailService.isConfigured()) {
-                EmailService.sendVerificationEmail(email, code)
-                        .then(()=>{
-                        showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success');
-                    })
-                        .catch(err=>{
-                            console.warn('E-Mail Versand fehlgeschlagen (resend):', err);
-                            const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
-                            let msg = raw || 'Bitte später erneut versuchen.';
-                            if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
-                                msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
-                            }
-                            showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
-                    })
-                    .finally(()=>{ if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; } });
+        if (window.EmailService && EmailService.isConfigured()) {
+            EmailService.sendVerificationEmail(email, code)
+                .then(()=> showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success'))
+                .catch(err=>{
+                    const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
+                    let msg = raw || 'Bitte später erneut versuchen.';
+                    if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
+                        msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
+                    }
+                    showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
+                    clearResendCooldown();
+                    if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
+                })
+                .finally(()=>{});
         } else {
-                console.log('[DEV] Resend – E-Mail Dienst nicht konfiguriert. Code:', code);
-                showMessage(`(Entwickler-Modus) Neuer Code: ${code}`, 'success');
-                if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
+            console.log('[DEV] Resend – E-Mail Dienst nicht konfiguriert. Code:', code);
+            showMessage(`(Entwickler-Modus) Neuer Code: ${code}`, 'success');
+            startResendCooldown(10);
         }
 }
 
+                function startResendCooldown(seconds){
+                    const until = Date.now() + seconds*1000;
+                    localStorage.setItem('resendCooldownUntil', String(until));
+                    runResendCountdown();
+                }
+
+                function runResendCountdown(){
+                    const btn = document.getElementById('resend-code-btn');
+                    if (!btn) return;
+                    const update = () => {
+                        const until = parseInt(localStorage.getItem('resendCooldownUntil')||'0',10);
+                        const remainingMs = until - Date.now();
+                        if (!until || remainingMs <= 0){
+                            clearResendCooldown();
+                            return;
+                        }
+                        const s = Math.ceil(remainingMs/1000);
+                        btn.disabled = true;
+                        btn.textContent = `Code erneut senden (${s}s)`;
+                    };
+                    update();
+                    if (resendCooldownTimer) clearInterval(resendCooldownTimer);
+                    resendCooldownTimer = setInterval(update, 1000);
+                }
+
+                function clearResendCooldown(){
+                    const btn = document.getElementById('resend-code-btn');
+                    localStorage.removeItem('resendCooldownUntil');
+                    if (resendCooldownTimer){ clearInterval(resendCooldownTimer); resendCooldownTimer = null; }
+                    if (btn){ btn.disabled = false; btn.textContent = 'Code erneut senden'; }
+                }
+
+                function applyResendCooldownState(){
+                    const until = parseInt(localStorage.getItem('resendCooldownUntil')||'0',10);
+                    if (until && Date.now() < until){
+                        runResendCountdown();
+                    } else {
+                        clearResendCooldown();
+                    }
+                }
+
 function verifyCode() {
     const enteredCode = document.getElementById('verification-code').value.trim();
-    const storedCode = localStorage.getItem('verificationCode');
+    const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
     const email = localStorage.getItem('verificationEmail');
+    if (api) {
+        fetch(`${api}/verification/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code: enteredCode })
+        }).then(async resp => {
+            const data = await resp.json().catch(()=>({}));
+            if (!resp.ok) throw new Error(data.error || 'Fehler');
+            const token = data.token;
+            return submitIdeaViaApi(token);
+        }).catch(err => {
+            showMessage(err.message || 'Verifizierung fehlgeschlagen', 'error');
+        });
+        return;
+    }
+    // Fallback: lokale Prüfung
+    const storedCode = localStorage.getItem('verificationCode');
     const expiry = parseInt(localStorage.getItem('verificationCodeExpiry')||'0',10);
     if (expiry && Date.now() > expiry) {
         showMessage('Der Verifizierungscode ist abgelaufen. Bitte fordere einen neuen Code an.', 'error');
@@ -156,6 +249,33 @@ function verifyCode() {
     }
 }
 
+function submitIdeaViaApi(token){
+    const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
+    if (!api) return;
+    const email = localStorage.getItem('verificationEmail');
+    currentIdea.submitterEmail = email;
+    return fetch(`${api}/ideas`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title: currentIdea.title, description: currentIdea.description, category: currentIdea.category })
+    }).then(async resp => {
+        const data = await resp.json().catch(()=>({}));
+        if (!resp.ok) throw new Error(data.error || 'Fehler');
+        closeModal();
+        document.getElementById('idea-form').reset();
+        currentIdea = null;
+        showMessage('Deine Idee wurde erfolgreich eingereicht!', 'success');
+        triggerSuccessAnimation();
+        updateStepUI(3);
+        if (isAdmin) { loadAdminIdeas(); updateAdminStats(); }
+    }).catch(err => {
+        showMessage(err.message || 'Einreichen fehlgeschlagen', 'error');
+    });
+}
+
 function saveIdea(idea) {
     const ideas = loadIdeas();
     ideas.push(idea);
@@ -170,7 +290,12 @@ function loadAdminIdeas() {
     if (!isAdmin) return;
     const container = document.getElementById('admin-ideas-list');
     if (!container) return;
-    const ideas = loadIdeas();
+    let ideas = loadIdeas();
+    const activeChip = document.querySelector('.chip-btn.active');
+    const filter = activeChip ? activeChip.getAttribute('data-cat') : 'alle';
+    if (filter && filter !== 'alle') {
+        ideas = ideas.filter(i => i.category === filter);
+    }
     if (!ideas.length) {
         container.innerHTML = '<p class="text-center">Noch keine Ideen vorhanden.</p>';
         return;
@@ -189,7 +314,7 @@ function createIdeaElement(idea, adminView) {
         hour: '2-digit',
         minute: '2-digit'
     });
-    const adminInfo = adminView ? `<div class="admin-info" style="margin-top:10px;padding:10px;background:var(--color-surface);border-radius:6px;font-size:12px;"><strong>Absender:</strong> ${idea.submitterEmail}<br><strong>ID:</strong> ${idea.id}</div>` : '';
+    const adminInfo = adminView ? `<div class="admin-info" style="margin-top:10px;padding:10px;background:var(--color-surface);border-radius:6px;font-size:12px;"><strong>Absender:</strong> ${idea.submitterEmail}<br><strong>IDEE:</strong> ${idea.id}</div>` : '';
     div.innerHTML = `<div class="idea-header"><div class="idea-title">${escapeHtml(idea.title)}</div><div style="display:flex;align-items:center;gap:.5rem;"><span class=\"idea-category\">${idea.category}</span></div></div><div class="idea-description">${escapeHtml(idea.description)}</div>${adminInfo}<div class="idea-meta"><span class="idea-date">${date}</span></div>`;
     return div;
 }
@@ -207,6 +332,12 @@ function handleAdminLogin(e) {
         loadAdminIdeas();
         updateAdminStats();
         showMessage('Erfolgreich als Admin angemeldet.', 'success');
+        const chips = document.querySelectorAll('.chip-btn');
+        chips.forEach(ch => ch.addEventListener('click', () => {
+            document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+            ch.classList.add('active');
+            loadAdminIdeas();
+        }));
     } else {
         showMessage('Ungültige Anmeldedaten.', 'error');
     }
@@ -268,6 +399,7 @@ function closeModal() {
     document.getElementById('verification-code').value = '';
     currentIdea = null;
     updateStepUI(1);
+    clearResendCooldown();
 }
 
 function showMessage(text, type = 'success') {
@@ -283,7 +415,7 @@ function showMessage(text, type = 'success') {
 }
 
 function generateId() {
-    return 'idea_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return 'idee_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 function escapeHtml(t) {
