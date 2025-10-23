@@ -121,5 +121,7 @@ app.get('/api/ideas', (req, res) => {
   return res.json({ ok: true, ideas: list });
 });
 
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 const port = Number(process.env.PORT || 8787);
 app.listen(port, () => console.log(`API listening on :${port}`));

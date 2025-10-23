@@ -11,6 +11,23 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
+function checkAdminStatus() {
+    if (localStorage.getItem('adminLoggedIn') === 'true') {
+        isAdmin = true;
+        document.getElementById('admin-login').style.display = 'none';
+        document.getElementById('admin-panel').style.display = 'block';
+        document.getElementById('admin-panel').classList.add('active');
+        loadAdminIdeas();
+        updateAdminStats();
+    }
+}
+
+function updateAdminStats() {
+    if (!isAdmin) return;
+    const total = document.getElementById('total-ideas');
+    if (total) total.textContent = loadIdeas().length;
+}
+
 function initializeApp() {
     const ideaForm = document.getElementById('idea-form');
     if (ideaForm) ideaForm.addEventListener('submit', handleIdeaSubmit);
@@ -64,25 +81,7 @@ function sendVerificationCode() {
     }
     const btn = document.getElementById('send-code-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
-    const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
-    if (api) {
-        fetch(`${api}/verification/request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        }).then(async resp => {
-            if (!resp.ok) throw new Error((await resp.json()).error || 'Fehler');
-            localStorage.setItem('verificationEmail', email);
-            document.getElementById('email-step').style.display = 'none';
-            document.getElementById('code-step').style.display = 'block';
-            applyResendCooldownState();
-            showMessage(`Code wurde an ${email} gesendet.`, 'success');
-        }).catch(err => {
-            showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message || err}`, 'error');
-        }).finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } });
-        return;
-    }
-    // Fallback: alter Frontend-Weg
+    // Client-seitiger Versand (EmailJS) – alter Weg
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     localStorage.setItem('verificationCode', code);
     localStorage.setItem('verificationEmail', email);
@@ -119,23 +118,6 @@ function resendVerificationCode(){
         if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
         // Starte Cooldown sofort, um Spam zu vermeiden
         startResendCooldown(30);
-        const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
-        if (api) {
-            fetch(`${api}/verification/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            }).then(async resp => {
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Fehler');
-                showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success');
-            }).catch(err => {
-                showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message || err}`, 'error');
-                clearResendCooldown();
-                if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
-            }).finally(() => { /* Button wird vom Cooldown gesteuert */ });
-            return;
-        }
-        // Fallback: Frontend-Resend
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         localStorage.setItem('verificationCode', code);
         localStorage.setItem('verificationEmail', email);
@@ -203,77 +185,74 @@ function resendVerificationCode(){
                 }
 
 function verifyCode() {
-    const enteredCode = document.getElementById('verification-code').value.trim();
-    const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
-    const email = localStorage.getItem('verificationEmail');
-    if (api) {
-        fetch(`${api}/verification/verify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, code: enteredCode })
-        }).then(async resp => {
-            const data = await resp.json().catch(()=>({}));
-            if (!resp.ok) throw new Error(data.error || 'Fehler');
-            const token = data.token;
-            return submitIdeaViaApi(token);
-        }).catch(err => {
-            showMessage(err.message || 'Verifizierung fehlgeschlagen', 'error');
-        });
-        return;
-    }
-    // Fallback: lokale Prüfung
-    const storedCode = localStorage.getItem('verificationCode');
-    const expiry = parseInt(localStorage.getItem('verificationCodeExpiry')||'0',10);
-    if (expiry && Date.now() > expiry) {
-        showMessage('Der Verifizierungscode ist abgelaufen. Bitte fordere einen neuen Code an.', 'error');
-        return;
-    }
-    if (enteredCode !== storedCode) {
-        showMessage('Ungültiger Verifizierungscode.', 'error');
-        return;
-    }
-    currentIdea.submitterEmail = email;
-    saveIdea(currentIdea);
-    localStorage.removeItem('verificationCode');
-    localStorage.removeItem('verificationEmail');
-    localStorage.removeItem('verificationCodeExpiry');
-    closeModal();
-    document.getElementById('idea-form').reset();
-    currentIdea = null;
-    showMessage('Deine Idee wurde erfolgreich eingereicht!', 'success');
-    triggerSuccessAnimation();
-    updateStepUI(3);
-    if (isAdmin) {
-        loadAdminIdeas();
-        updateAdminStats();
-    }
-}
+    try {
+        const verifyBtn = document.querySelector('button[onclick="verifyCode()"]');
+        if (verifyBtn) {
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Prüfe...';
+        }
 
-function submitIdeaViaApi(token){
-    const api = window.API_CONFIG && window.API_CONFIG.baseUrl;
-    if (!api) return;
-    const email = localStorage.getItem('verificationEmail');
-    currentIdea.submitterEmail = email;
-    return fetch(`${api}/ideas`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ title: currentIdea.title, description: currentIdea.description, category: currentIdea.category })
-    }).then(async resp => {
-        const data = await resp.json().catch(()=>({}));
-        if (!resp.ok) throw new Error(data.error || 'Fehler');
-        closeModal();
-        document.getElementById('idea-form').reset();
-        currentIdea = null;
-        showMessage('Deine Idee wurde erfolgreich eingereicht!', 'success');
+        const enteredCode = document.getElementById('verification-code').value.trim();
+        // Lokale Prüfung
+        const email = localStorage.getItem('verificationEmail');
+        const storedCode = localStorage.getItem('verificationCode');
+        const expiry = parseInt(localStorage.getItem('verificationCodeExpiry')||'0',10);
+
+        if (!storedCode || !email) {
+            showMessage('Kein aktiver Code gefunden. Bitte erneut senden.', 'error');
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Idee einreichen';
+            }
+            return;
+        }
+        if (expiry && Date.now() > expiry) {
+            showMessage('Der Verifizierungscode ist abgelaufen. Bitte fordere einen neuen Code an.', 'error');
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Idee einreichen';
+            }
+            return;
+        }
+        if (enteredCode !== storedCode) {
+            showMessage('Ungültiger Verifizierungscode.', 'error');
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Idee einreichen';
+            }
+            return;
+        }
+        if (!currentIdea) {
+            showMessage('Sitzung abgelaufen. Bitte Formular erneut absenden.', 'error');
+            closeModal();
+            return;
+        }
+
+        currentIdea.submitterEmail = email;
+        saveIdea(currentIdea);
+        localStorage.removeItem('verificationCode');
+        localStorage.removeItem('verificationEmail');
+        localStorage.removeItem('verificationCodeExpiry');
+
+        // Ensure animation is triggered before closing modal
         triggerSuccessAnimation();
-        updateStepUI(3);
-        if (isAdmin) { loadAdminIdeas(); updateAdminStats(); }
-    }).catch(err => {
-        showMessage(err.message || 'Einreichen fehlgeschlagen', 'error');
-    });
+        
+        setTimeout(() => {
+            closeModal();
+            const form = document.getElementById('idea-form');
+            if (form) form.reset();
+            currentIdea = null;
+            showMessage('Deine Idee wurde erfolgreich eingereicht!', 'success');
+            updateStepUI(3);
+            if (isAdmin) {
+                loadAdminIdeas();
+                updateAdminStats();
+            }
+        }, 300); // Small delay to ensure animation is visible
+    } catch (err) {
+        console.error('verifyCode error:', err);
+        showMessage('Ein Fehler ist aufgetreten. Bitte erneut versuchen.', 'error');
+    }
 }
 
 function saveIdea(idea) {
@@ -343,19 +322,6 @@ function handleAdminLogin(e) {
     }
 }
 
-function checkAdminStatus() {
-    if (localStorage.getItem('adminLoggedIn') === 'true') {
-        isAdmin = true;
-    }
-}
-
-function updateAdminStats() {
-    if (!isAdmin) return;
-    const ideas = loadIdeas();
-    const t = document.getElementById('total-ideas');
-    if (t) t.textContent = ideas.length;
-}
-
 function logout() {
     isAdmin = false;
     localStorage.removeItem('adminLoggedIn');
@@ -380,26 +346,41 @@ function exportData() {
     showMessage('Daten wurden exportiert.', 'success');
 }
 
-function clearData() {
-    if (confirm('Wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-        localStorage.removeItem('ideas');
-        if (isAdmin) {
-            loadAdminIdeas();
-            updateAdminStats();
-        }
-        showMessage('Alle Daten wurden gelöscht.', 'success');
-    }
-}
-
 function closeModal() {
-    document.getElementById('email-modal').classList.remove('active');
-    document.getElementById('email-step').style.display = 'block';
-    document.getElementById('code-step').style.display = 'none';
-    document.getElementById('user-email').value = '';
-    document.getElementById('verification-code').value = '';
+    const modal = document.getElementById('email-modal');
+    if (!modal) return;
+
+    // Remove active class first
+    modal.classList.remove('active');
+    
+    // Reset form state
+    const emailStep = document.getElementById('email-step');
+    const codeStep = document.getElementById('code-step');
+    if (emailStep) emailStep.style.display = 'block';
+    if (codeStep) codeStep.style.display = 'none';
+
+    // Clear all inputs
+    const ue = document.getElementById('user-email');
+    const vc = document.getElementById('verification-code');
+    if (ue) ue.value = '';
+    if (vc) vc.value = '';
+
+    // Reset state
     currentIdea = null;
     updateStepUI(1);
     clearResendCooldown();
+    
+    // Reset button states
+    const sendBtn = document.getElementById('send-code-btn');
+    if (sendBtn) { 
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Code senden';
+    }
+    const resendBtn = document.getElementById('resend-code-btn');
+    if (resendBtn) {
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Code erneut senden';
+    }
 }
 
 function showMessage(text, type = 'success') {
