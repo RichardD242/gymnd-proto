@@ -11,20 +11,17 @@ import VerificationCode from './models/VerificationCode.js';
 const app = express();
 app.use(express.json());
 
-// Trust proxy for Railway/Render/etc (required for rate limiting)
 app.set('trust proxy', 1);
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-// Support multiple origins (production and preview URLs)
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
+
     if (!origin) return callback(null, true);
     
-    // Allow if CORS_ORIGIN is *
     if (CORS_ORIGIN === '*') return callback(null, true);
     
-    // Allow if origin matches or is a Vercel preview URL
     const allowedOrigins = CORS_ORIGIN.split(',').map(o => o.trim());
     if (allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
       callback(null, true);
@@ -44,16 +41,12 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'gymnasium2024';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ideenboerse';
 
-// MongoDB Connection
+// MongoDB
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('✓ MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Remove old in-memory store
-// const store = {
-//   codes: new Map(),
-//   ideas: []
-// };
+
 
 function createTransporter() {
   const transporter = nodemailer.createTransport({
@@ -100,7 +93,6 @@ app.post('/api/verification/request', async (req, res) => {
     const code = generateCode();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min
     
-    // Speichere in MongoDB (überschreibe alten Code falls vorhanden)
     await VerificationCode.findOneAndUpdate(
       { email },
       { code, expiresAt: new Date(expiresAt) },
@@ -207,7 +199,7 @@ app.post('/api/verification/request', async (req, res) => {
     await transporter.sendMail({
       from: `${fromName} <${fromEmail}>`,
       to: email,
-      subject: '✓ Verifiziere deine Idee – Dein Code ist da!',
+      subject: 'Verifiziere deine Idee',
       html,
     });
     
@@ -230,7 +222,6 @@ app.post('/api/verification/verify', async (req, res) => {
     }
     if (code !== rec.code) return res.status(400).json({ error: 'Invalid code' });
     
-    // Code ist gültig - lösche ihn
     await VerificationCode.deleteOne({ email });
     
     const token = signToken({ email }, '1h');
@@ -275,7 +266,6 @@ app.get('/api/ideas', async (req, res) => {
   }
 });
 
-// Admin Login
 app.post('/api/admin/login', (req, res) => {
   try {
     const { username, password } = req.body;
@@ -290,7 +280,6 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// Admin Middleware
 function adminMiddleware(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -305,7 +294,6 @@ function adminMiddleware(req, res, next) {
   }
 }
 
-// Admin: Get all ideas
 app.get('/api/admin/ideas', adminMiddleware, async (req, res) => {
   try {
     const { category } = req.query;
@@ -318,7 +306,6 @@ app.get('/api/admin/ideas', adminMiddleware, async (req, res) => {
   }
 });
 
-// Admin: Get statistics
 app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
   try {
     const total = await Idea.countDocuments();
@@ -332,7 +319,6 @@ app.get('/api/admin/stats', adminMiddleware, async (req, res) => {
   }
 });
 
-// Admin: Delete all ideas (dangerous!)
 app.delete('/api/admin/ideas', adminMiddleware, async (req, res) => {
   try {
     await Idea.deleteMany({});
@@ -343,7 +329,6 @@ app.delete('/api/admin/ideas', adminMiddleware, async (req, res) => {
   }
 });
 
-// Admin: Delete single idea
 app.delete('/api/admin/ideas/:id', adminMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
