@@ -1,3 +1,3 @@
 window.API_CONFIG = {
-  baseUrl: 'https://gymnd-public.vercel.app/' 
+  baseUrl: 'https://YOUR-RAILWAY-URL.railway.app/api'  // Replace with your Railway backend URL
 };
