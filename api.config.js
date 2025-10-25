@@ -1,3 +1,3 @@
 window.API_CONFIG = {
-  baseUrl: 'http://localhost:8787/api'
+  baseUrl: 'https://YOUR-BACKEND-URL.vercel.app/api'  // Replace with your actual backend URL after deployment
 };
