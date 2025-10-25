@@ -1,0 +1,13 @@
+{
+  "name": "ideenboerse-projekt",
+  "version": "1.0.0",
+  "description": "Ideenbörse Gymnasium Neusiedl am See - Fullstack Application",
+  "scripts": {
+    "install-all": "cd server && npm install",
+    "dev": "cd server && npm run dev",
+    "start": "cd server && npm start"
+  },
+  "keywords": ["ideenboerse", "gymnasium", "express", "mongodb"],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,31 +1,64 @@
 let currentIdea = null;
 let isAdmin = false;
 let resendCooldownTimer = null;
+let authToken = null; // Backend JWT token
 
-const ADMIN_CREDENTIALS = {
-    username: 'admin',
-    password: 'gymnasium2024'
-};
+// API Helper
+const API_BASE = window.API_CONFIG?.baseUrl || 'http://localhost:8787/api';
+
+async function apiCall(endpoint, options = {}) {
+    const url = `${API_BASE}${endpoint}`;
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    const response = await fetch(url, { ...options, headers });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'API request failed');
+    }
+    return data;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
+function setupFilterButtons() {
+    const chips = document.querySelectorAll('.chip-btn');
+    chips.forEach(ch => ch.addEventListener('click', () => {
+        document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+        ch.classList.add('active');
+        loadAdminIdeas();
+    }));
+}
+
 function checkAdminStatus() {
-    if (localStorage.getItem('adminLoggedIn') === 'true') {
+    const token = localStorage.getItem('adminToken');
+    if (token) {
+        authToken = token;
         isAdmin = true;
         document.getElementById('admin-login').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'block';
         document.getElementById('admin-panel').classList.add('active');
         loadAdminIdeas();
         updateAdminStats();
+        setupFilterButtons();
     }
 }
 
-function updateAdminStats() {
+async function updateAdminStats() {
     if (!isAdmin) return;
-    const total = document.getElementById('total-ideas');
-    if (total) total.textContent = loadIdeas().length;
+    try {
+        const data = await apiCall('/admin/stats');
+        const total = document.getElementById('total-ideas');
+        if (total) total.textContent = data.stats.total;
+    } catch (e) {
+        console.error('Failed to load stats:', e);
+    }
 }
 
 function initializeApp() {
@@ -81,66 +114,51 @@ function sendVerificationCode() {
     }
     const btn = document.getElementById('send-code-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
-    // Client-seitiger Versand (EmailJS) – alter Weg
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    localStorage.setItem('verificationCode', code);
-    localStorage.setItem('verificationEmail', email);
-    localStorage.setItem('verificationCodeExpiry', String(Date.now() + 10*60*1000));
-    document.getElementById('email-step').style.display = 'none';
-    document.getElementById('code-step').style.display = 'block';
-    applyResendCooldownState();
-    if (window.EmailService && EmailService.isConfigured()) {
-        EmailService.sendVerificationEmail(email, code)
-            .then(() => showMessage(`Code wurde an ${email} gesendet.`, 'success'))
-            .catch(err => {
-                const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
-                let msg = raw || 'Bitte später erneut versuchen.';
-                if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
-                    msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
-                }
-                showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
-            })
-            .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } });
-    } else {
-        console.log(`[DEV] E-Mail Dienst nicht konfiguriert. Code: ${code}`);
-        showMessage(`(Entwickler-Modus) Code: ${code}`, 'success');
-        if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; }
-    }
+    
+    // Backend API call
+    apiCall('/verification/request', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+    })
+    .then(() => {
+        localStorage.setItem('verificationEmail', email);
+        document.getElementById('email-step').style.display = 'none';
+        document.getElementById('code-step').style.display = 'block';
+        applyResendCooldownState();
+        showMessage(`Code wurde an ${email} gesendet.`, 'success');
+    })
+    .catch(err => {
+        showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message}`, 'error');
+    })
+    .finally(() => { 
+        if (btn) { btn.disabled = false; btn.textContent = 'Code senden'; } 
+    });
 }
 
 function resendVerificationCode(){
-        const email = localStorage.getItem('verificationEmail') || document.getElementById('user-email')?.value.trim();
-        if (!email || !email.endsWith('@gym-nd.at')) {
-                showMessage('Bitte verwende deine @gym-nd.at E-Mail-Adresse.', 'error');
-                return;
-        }
-        const btn = document.getElementById('resend-code-btn');
-        if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
-        // Starte Cooldown sofort, um Spam zu vermeiden
-        startResendCooldown(30);
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        localStorage.setItem('verificationCode', code);
-        localStorage.setItem('verificationEmail', email);
-        localStorage.setItem('verificationCodeExpiry', String(Date.now() + 10*60*1000));
-        if (window.EmailService && EmailService.isConfigured()) {
-            EmailService.sendVerificationEmail(email, code)
-                .then(()=> showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success'))
-                .catch(err=>{
-                    const raw = (err && (err.text || err.message)) ? String(err.text || err.message) : '';
-                    let msg = raw || 'Bitte später erneut versuchen.';
-                    if (/Gmail_API|insufficient authentication scopes/i.test(raw)) {
-                        msg = 'Gmail-Service in EmailJS ohne ausreichende Berechtigungen verbunden. Bitte Gmail in EmailJS erneut verbinden (mit Senderechten) oder auf SMTP (App-Passwort) umstellen.';
-                    }
-                    showMessage(`E-Mail-Versand fehlgeschlagen: ${msg}`, 'error');
-                    clearResendCooldown();
-                    if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
-                })
-                .finally(()=>{});
-        } else {
-            console.log('[DEV] Resend – E-Mail Dienst nicht konfiguriert. Code:', code);
-            showMessage(`(Entwickler-Modus) Neuer Code: ${code}`, 'success');
-            startResendCooldown(10);
-        }
+    const email = localStorage.getItem('verificationEmail') || document.getElementById('user-email')?.value.trim();
+    if (!email || !email.endsWith('@gym-nd.at')) {
+        showMessage('Bitte verwende deine @gym-nd.at E-Mail-Adresse.', 'error');
+        return;
+    }
+    const btn = document.getElementById('resend-code-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
+    
+    startResendCooldown(30);
+    
+    // Backend API call
+    apiCall('/verification/request', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+    })
+    .then(() => {
+        showMessage(`Neuer Code wurde an ${email} gesendet.`, 'success');
+    })
+    .catch(err => {
+        showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message}`, 'error');
+        clearResendCooldown();
+        if (btn) { btn.disabled = false; btn.textContent = 'Code erneut senden'; }
+    });
 }
 
                 function startResendCooldown(seconds){
@@ -193,94 +211,93 @@ function verifyCode() {
         }
 
         const enteredCode = document.getElementById('verification-code').value.trim();
-        // Lokale Prüfung
         const email = localStorage.getItem('verificationEmail');
-        const storedCode = localStorage.getItem('verificationCode');
-        const expiry = parseInt(localStorage.getItem('verificationCodeExpiry')||'0',10);
 
-        if (!storedCode || !email) {
-            showMessage('Kein aktiver Code gefunden. Bitte erneut senden.', 'error');
+        if (!email) {
+            showMessage('Keine E-Mail gefunden. Bitte erneut senden.', 'error');
             if (verifyBtn) {
                 verifyBtn.disabled = false;
                 verifyBtn.textContent = 'Idee einreichen';
             }
             return;
         }
-        if (expiry && Date.now() > expiry) {
-            showMessage('Der Verifizierungscode ist abgelaufen. Bitte fordere einen neuen Code an.', 'error');
-            if (verifyBtn) {
-                verifyBtn.disabled = false;
-                verifyBtn.textContent = 'Idee einreichen';
-            }
-            return;
-        }
-        if (enteredCode !== storedCode) {
-            showMessage('Ungültiger Verifizierungscode.', 'error');
-            if (verifyBtn) {
-                verifyBtn.disabled = false;
-                verifyBtn.textContent = 'Idee einreichen';
-            }
-            return;
-        }
+
         if (!currentIdea) {
             showMessage('Sitzung abgelaufen. Bitte Formular erneut absenden.', 'error');
             closeModal();
             return;
         }
 
-        currentIdea.submitterEmail = email;
-        saveIdea(currentIdea);
-        localStorage.removeItem('verificationCode');
-        localStorage.removeItem('verificationEmail');
-        localStorage.removeItem('verificationCodeExpiry');
-
-        // Ensure animation is triggered before closing modal
-        triggerSuccessAnimation();
-        
-        setTimeout(() => {
-            closeModal();
-            const form = document.getElementById('idea-form');
-            if (form) form.reset();
-            currentIdea = null;
-            showMessage('Deine Idee wurde erfolgreich eingereicht!', 'success');
-            updateStepUI(3);
-            if (isAdmin) {
-                loadAdminIdeas();
-                updateAdminStats();
+        apiCall('/verification/verify', {
+            method: 'POST',
+            body: JSON.stringify({ email, code: enteredCode })
+        })
+        .then(data => {
+            authToken = data.token;
+            return apiCall('/ideas', {
+                method: 'POST',
+                body: JSON.stringify({
+                    title: currentIdea.title,
+                    description: currentIdea.description,
+                    category: currentIdea.category
+                })
+            });
+        })
+        .then(() => {
+            localStorage.removeItem('verificationEmail');
+            triggerSuccessAnimation();
+            
+            setTimeout(() => {
+                closeModal();
+                const form = document.getElementById('idea-form');
+                if (form) form.reset();
+                currentIdea = null;
+                authToken = null;
+                showMessage('Deine Idee wurde erfolgreich eingereicht!', 'success');
+                updateStepUI(3);
+                if (isAdmin) {
+                    loadAdminIdeas();
+                    updateAdminStats();
+                }
+            }, 300);
+        })
+        .catch(err => {
+            showMessage(`Fehler: ${err.message}`, 'error');
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Idee einreichen';
             }
-        }, 300); // Small delay to ensure animation is visible
+        });
     } catch (err) {
         console.error('verifyCode error:', err);
         showMessage('Ein Fehler ist aufgetreten. Bitte erneut versuchen.', 'error');
     }
 }
 
-function saveIdea(idea) {
-    const ideas = loadIdeas();
-    ideas.push(idea);
-    localStorage.setItem('ideas', JSON.stringify(ideas));
-}
 
-function loadIdeas() {
-    return JSON.parse(localStorage.getItem('ideas')) || [];
-}
-
-function loadAdminIdeas() {
+async function loadAdminIdeas() {
     if (!isAdmin) return;
     const container = document.getElementById('admin-ideas-list');
     if (!container) return;
-    let ideas = loadIdeas();
-    const activeChip = document.querySelector('.chip-btn.active');
-    const filter = activeChip ? activeChip.getAttribute('data-cat') : 'alle';
-    if (filter && filter !== 'alle') {
-        ideas = ideas.filter(i => i.category === filter);
+    
+    try {
+        const activeChip = document.querySelector('.chip-btn.active');
+        const filter = activeChip ? activeChip.getAttribute('data-cat') : 'alle';
+        const endpoint = filter && filter !== 'alle' ? `/admin/ideas?category=${filter}` : '/admin/ideas';
+        
+        const data = await apiCall(endpoint);
+        const ideas = data.ideas || [];
+        
+        if (!ideas.length) {
+            container.innerHTML = '<p class="text-center">Noch keine Ideen vorhanden.</p>';
+            return;
+        }
+        container.innerHTML = '';
+        ideas.forEach(i => container.appendChild(createIdeaElement(i, true)));
+    } catch (e) {
+        console.error('Failed to load admin ideas:', e);
+        container.innerHTML = '<p class="text-center text-error">Fehler beim Laden der Ideen.</p>';
     }
-    if (!ideas.length) {
-        container.innerHTML = '<p class="text-center">Noch keine Ideen vorhanden.</p>';
-        return;
-    }
-    container.innerHTML = '';
-    ideas.forEach(i => container.appendChild(createIdeaElement(i, true)));
 }
 
 function createIdeaElement(idea, adminView) {
@@ -298,33 +315,37 @@ function createIdeaElement(idea, adminView) {
     return div;
 }
 
-function handleAdminLogin(e) {
+async function handleAdminLogin(e) {
     e.preventDefault();
     const u = document.getElementById('admin-username').value.trim();
     const p = document.getElementById('admin-password').value.trim();
-    if (u === ADMIN_CREDENTIALS.username && p === ADMIN_CREDENTIALS.password) {
+    
+    try {
+        const data = await apiCall('/admin/login', {
+            method: 'POST',
+            body: JSON.stringify({ username: u, password: p })
+        });
+        
+        authToken = data.token;
         isAdmin = true;
-        localStorage.setItem('adminLoggedIn', 'true');
+        localStorage.setItem('adminToken', authToken);
         document.getElementById('admin-login').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'block';
         document.getElementById('admin-panel').classList.add('active');
         loadAdminIdeas();
         updateAdminStats();
         showMessage('Erfolgreich als Admin angemeldet.', 'success');
-        const chips = document.querySelectorAll('.chip-btn');
-        chips.forEach(ch => ch.addEventListener('click', () => {
-            document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
-            ch.classList.add('active');
-            loadAdminIdeas();
-        }));
-    } else {
+        
+        setupFilterButtons();
+    } catch (e) {
         showMessage('Ungültige Anmeldedaten.', 'error');
     }
 }
 
 function logout() {
     isAdmin = false;
-    localStorage.removeItem('adminLoggedIn');
+    authToken = null;
+    localStorage.removeItem('adminToken');
     if (document.getElementById('admin-panel')) {
         document.getElementById('admin-panel').style.display = 'none';
         document.getElementById('admin-login').style.display = 'block';
@@ -334,16 +355,35 @@ function logout() {
     }
 }
 
-function exportData() {
-    const ideas = loadIdeas();
-    const blob = new Blob([JSON.stringify(ideas, null, 2)], {
-        type: 'application/json'
-    });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `ideen_export_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    showMessage('Daten wurden exportiert.', 'success');
+async function exportData() {
+    try {
+        const data = await apiCall('/admin/ideas');
+        const ideas = data.ideas || [];
+        const blob = new Blob([JSON.stringify(ideas, null, 2)], {
+            type: 'application/json'
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ideen_export_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        showMessage('Daten wurden exportiert.', 'success');
+    } catch (e) {
+        showMessage('Fehler beim Exportieren der Daten.', 'error');
+    }
+}
+
+async function clearData() {
+    if (!confirm('Möchtest du wirklich ALLE Ideen löschen? Diese Aktion kann nicht rückgängig gemacht werden!')) {
+        return;
+    }
+    try {
+        await apiCall('/admin/ideas', { method: 'DELETE' });
+        showMessage('Alle Ideen wurden gelöscht.', 'success');
+        loadAdminIdeas();
+        updateAdminStats();
+    } catch (e) {
+        showMessage('Fehler beim Löschen der Daten.', 'error');
+    }
 }
 
 function closeModal() {
@@ -413,18 +453,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
 });
 
-function createDemoData() {
-    const demo = [{
-        id: 'demo_1',
-        title: 'Längere Mittagspause',
-        description: 'Die aktuelle Mittagspause ist zu kurz. Wir brauchen mehr Zeit zum Essen und Entspannen.',
-        category: 'Schulgebäude',
-        visibility: 'private',
-        timestamp: new Date(Date.now() - 2 * 864e5).toISOString(),
-        submitterEmail: 'demo@gym-nd.at'
-    }];
-    localStorage.setItem('ideas', JSON.stringify(demo));
-}
+// Removed createDemoData function - data now stored in MongoDB
 
 // Success Animation (Confetti + Pulse)
 function triggerSuccessAnimation(){
