@@ -115,12 +115,15 @@ function sendVerificationCode() {
     const btn = document.getElementById('send-code-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Senden…'; }
     
+    console.log('Sending verification request to:', `${API_BASE}/verification/request`);
+    
     // Backend API call
     apiCall('/verification/request', {
         method: 'POST',
         body: JSON.stringify({ email })
     })
-    .then(() => {
+    .then((data) => {
+        console.log('Verification response:', data);
         localStorage.setItem('verificationEmail', email);
         document.getElementById('email-step').style.display = 'none';
         document.getElementById('code-step').style.display = 'block';
@@ -128,6 +131,7 @@ function sendVerificationCode() {
         showMessage(`Code wurde an ${email} gesendet.`, 'success');
     })
     .catch(err => {
+        console.error('Verification error:', err);
         showMessage(`E-Mail-Versand fehlgeschlagen: ${err.message}`, 'error');
     })
     .finally(() => { 

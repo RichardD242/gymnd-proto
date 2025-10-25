@@ -11,6 +11,9 @@ import VerificationCode from './models/VerificationCode.js';
 const app = express();
 app.use(express.json());
 
+// Trust proxy for Railway/Render/etc (required for rate limiting)
+app.set('trust proxy', 1);
+
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 // Support multiple origins (production and preview URLs)
 const corsOptions = {
@@ -61,6 +64,9 @@ function createTransporter() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
   return transporter;
 }
