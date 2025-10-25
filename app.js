@@ -1,9 +1,8 @@
 let currentIdea = null;
 let isAdmin = false;
 let resendCooldownTimer = null;
-let authToken = null; // Backend JWT token
+let authToken = null;
 
-// API Helper
 const API_BASE = window.API_CONFIG?.baseUrl || 'http://localhost:8787/api';
 
 async function apiCall(endpoint, options = {}) {
@@ -117,7 +116,6 @@ function sendVerificationCode() {
     
     console.log('Sending verification request to:', `${API_BASE}/verification/request`);
     
-    // Backend API call
     apiCall('/verification/request', {
         method: 'POST',
         body: JSON.stringify({ email })
@@ -150,7 +148,6 @@ function resendVerificationCode(){
     
     startResendCooldown(30);
     
-    // Backend API call
     apiCall('/verification/request', {
         method: 'POST',
         body: JSON.stringify({ email })
@@ -394,27 +391,22 @@ function closeModal() {
     const modal = document.getElementById('email-modal');
     if (!modal) return;
 
-    // Remove active class first
     modal.classList.remove('active');
     
-    // Reset form state
     const emailStep = document.getElementById('email-step');
     const codeStep = document.getElementById('code-step');
     if (emailStep) emailStep.style.display = 'block';
     if (codeStep) codeStep.style.display = 'none';
 
-    // Clear all inputs
     const ue = document.getElementById('user-email');
     const vc = document.getElementById('verification-code');
     if (ue) ue.value = '';
     if (vc) vc.value = '';
 
-    // Reset state
     currentIdea = null;
     updateStepUI(1);
     clearResendCooldown();
     
-    // Reset button states
     const sendBtn = document.getElementById('send-code-btn');
     if (sendBtn) { 
         sendBtn.disabled = false;
@@ -457,26 +449,22 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
 });
 
-// Removed createDemoData function - data now stored in MongoDB
-
-// Success Animation (Confetti + Pulse)
 function triggerSuccessAnimation(){
     try {
-        // Pulse Effekt auf Formular-Karte
         const card = document.querySelector('#submit-idea .card');
         if(card){
             card.classList.remove('submission-pulse');
-            void card.offsetWidth; // reflow zum Neustart der Animation
+            void card.offsetWidth;
             card.classList.add('submission-pulse');
         }
-        // Confetti Container einmalig
+
         let container = document.querySelector('.confetti-container');
         if(!container){
             container = document.createElement('div');
             container.className = 'confetti-container';
             document.body.appendChild(container);
         }
-        // Bestehende Stücke entfernen
+
         container.innerHTML = '';
         const colors = ['#2f6b2f','#318831','#1d4f91','#b9352f','#d39d17'];
         const amount = 40;
@@ -494,7 +482,7 @@ function triggerSuccessAnimation(){
             piece.style.transform = `rotate(${Math.random()*rotate}deg)`;
             container.appendChild(piece);
         }
-        // Automatisch nach 4s aufräumen
+
         setTimeout(()=>{ if(container) container.innerHTML=''; },4000);
     } catch(e){
         console.warn('Confetti error:', e);
