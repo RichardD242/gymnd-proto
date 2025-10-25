@@ -12,7 +12,26 @@ const app = express();
 app.use(express.json());
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
+// Support multiple origins (production and preview URLs)
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // Allow if CORS_ORIGIN is *
+    if (CORS_ORIGIN === '*') return callback(null, true);
+    
+    // Allow if origin matches or is a Vercel preview URL
+    const allowedOrigins = CORS_ORIGIN.split(',').map(o => o.trim());
+    if (allowedOrigins.includes(origin) || origin.includes('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+};
+app.use(cors(corsOptions));
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use('/api/', limiter);
