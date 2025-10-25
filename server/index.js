@@ -107,7 +107,6 @@ app.post('/api/verification/request', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    const transporter = createTransporter();
     const fromName = process.env.SMTP_FROM_NAME || 'Ideenbörse';
     const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
     const html = `
@@ -203,12 +202,15 @@ app.post('/api/verification/request', async (req, res) => {
 </body>
 </html>
     `;
+    
+    const transporter = createTransporter();
     await transporter.sendMail({
       from: `${fromName} <${fromEmail}>`,
       to: email,
-      subject: 'Dein Verfizierungscode',
+      subject: '✓ Verifiziere deine Idee – Dein Code ist da!',
       html,
     });
+    
     return res.json({ ok: true });
   } catch (e) {
     console.error('send code error', e);
