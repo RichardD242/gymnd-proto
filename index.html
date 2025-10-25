@@ -4,18 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ideenbörse - Gymnasium Neusiedl am See</title>
-    <!-- Oswald Font Einbindung -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" sizes="32x32" href="https://www.gymnasium-neusiedl.at/wp-content/uploads/2024/02/cropped-favicon-32x32.png">
-    <!-- EmailJS SDK für client-seitigen Versand -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-    <!-- E-Mail Konfiguration und Service -->
     <script src="email.config.js"></script>
     <script src="email.js"></script>
-    <!-- Optional: Backend API Config -->
     <script src="api.config.js"></script>
 </head>
 <body>
@@ -28,7 +24,6 @@
             <div class="logo-wrap" aria-hidden="true"><img src="logo.svg" alt="Schullogo" class="site-logo"></div>
         </header>
 
-        <!-- Navigation -->
         <nav class="progress-steps" aria-label="Ablauf Einsenden">
             <div class="step active" data-step="1">
                 <span class="circle">1</span>
@@ -47,7 +42,6 @@
             </div>
         </nav>
 
-        <!-- Idee einreichen Tab -->
     <div id="submit-idea" class="tab-section">
             <div class="card">
                 <h2>Neue Idee einreichen</h2>
@@ -77,7 +71,6 @@
                 </form>
             </div>
         </div>
-        <!-- E-Mail Verifizierung Modal -->
         <div id="email-modal" class="modal">
             <div class="modal-content">
                 <h3>E-Mail Verifizierung</h3>
@@ -108,11 +101,8 @@
         </div>
 
 
-        <!-- Admin Login Tab -->
-        <!-- Admin ausgelagert -->
     </div>
 
-    <!-- Success/Error Messages -->
     <div id="message-container"></div>
 
     <script src="app.js"></script>

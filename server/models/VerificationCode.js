@@ -20,7 +20,7 @@ const verificationCodeSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: 600 // TTL index - document wird nach 10 Minuten automatisch gelöscht
+    expires: 600 // TTL index - wird nach 10m gelöscht
   }
 });
 

@@ -57,7 +57,7 @@ function createTransporter() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    connectionTimeout: 10000, // 10 seconds
+    connectionTimeout: 10000, // 10s
     greetingTimeout: 10000,
     socketTimeout: 10000,
   });
@@ -91,7 +91,7 @@ app.post('/api/verification/request', async (req, res) => {
     if (!email || !email.endsWith('@gym-nd.at')) return res.status(400).json({ error: 'Invalid email' });
     
     const code = generateCode();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 min
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10m
     
     await VerificationCode.findOneAndUpdate(
       { email },
