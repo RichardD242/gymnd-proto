@@ -1,5 +1,6 @@
 let currentIdea = null;
 let isAdmin = false;
+let adminRole = null;
 let resendCooldownTimer = null;
 let authToken = null;
 
@@ -37,9 +38,11 @@ function setupFilterButtons() {
 
 function checkAdminStatus() {
     const token = localStorage.getItem('adminToken');
+    const role = localStorage.getItem('adminRole');
     if (token) {
         authToken = token;
         isAdmin = true;
+        adminRole = role || 'superadmin';
         document.getElementById('admin-login').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'block';
         document.getElementById('admin-panel').classList.add('active');
@@ -294,14 +297,14 @@ async function loadAdminIdeas() {
             return;
         }
         container.innerHTML = '';
-        ideas.forEach(i => container.appendChild(createIdeaElement(i, true)));
+        ideas.forEach(i => container.appendChild(createIdeaElement(i, true, adminRole)));
     } catch (e) {
         console.error('Failed to load admin ideas:', e);
         container.innerHTML = '<p class="text-center text-error">Fehler beim Laden der Ideen.</p>';
     }
 }
 
-function createIdeaElement(idea, adminView) {
+function createIdeaElement(idea, adminView, role) {
     const div = document.createElement('div');
     div.className = 'idea-item';
     const date = new Date(idea.timestamp).toLocaleDateString('de-DE', {
@@ -311,7 +314,8 @@ function createIdeaElement(idea, adminView) {
         hour: '2-digit',
         minute: '2-digit'
     });
-    const adminInfo = adminView ? `<div class="admin-info" style="margin-top:10px;padding:10px;background:var(--color-surface);border-radius:6px;font-size:12px;"><strong>Absender:</strong> ${idea.submitterEmail}<br><strong>IDEE:</strong> ${idea.id}</div>` : '';
+    // Only show admin info (ID and email) for superadmin role
+    const adminInfo = (adminView && role === 'superadmin') ? `<div class="admin-info" style="margin-top:10px;padding:10px;background:var(--color-surface);border-radius:6px;font-size:12px;"><strong>Absender:</strong> ${idea.submitterEmail}<br><strong>IDEE:</strong> ${idea.id}</div>` : '';
     div.innerHTML = `<div class="idea-header"><div class="idea-title">${escapeHtml(idea.title)}</div><div style="display:flex;align-items:center;gap:.5rem;"><span class=\"idea-category\">${idea.category}</span></div></div><div class="idea-description">${escapeHtml(idea.description)}</div>${adminInfo}<div class="idea-meta"><span class="idea-date">${date}</span></div>`;
     return div;
 }
@@ -329,7 +333,9 @@ async function handleAdminLogin(e) {
         
         authToken = data.token;
         isAdmin = true;
+        adminRole = data.role || 'superadmin';
         localStorage.setItem('adminToken', authToken);
+        localStorage.setItem('adminRole', adminRole);
         document.getElementById('admin-login').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'block';
         document.getElementById('admin-panel').classList.add('active');
@@ -346,7 +352,9 @@ async function handleAdminLogin(e) {
 function logout() {
     isAdmin = false;
     authToken = null;
+    adminRole = null;
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminRole');
     if (document.getElementById('admin-panel')) {
         document.getElementById('admin-panel').style.display = 'none';
         document.getElementById('admin-login').style.display = 'block';

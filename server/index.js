@@ -39,6 +39,8 @@ app.use('/api/', limiter);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'gymnasium2024';
+const LEHRER_USERNAME = process.env.LEHRER_USERNAME || 'lehrer';
+const LEHRER_PASSWORD = process.env.LEHRER_PASSWORD || 'gymnasium2023';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ideenboerse';
 
 // MongoDB
@@ -269,10 +271,19 @@ app.get('/api/ideas', async (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   try {
     const { username, password } = req.body;
+    
+    // Check superadmin credentials (ADMIN)
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      const token = signToken({ role: 'admin', username }, '24h');
-      return res.json({ ok: true, token });
+      const token = signToken({ role: 'superadmin', username }, '24h');
+      return res.json({ ok: true, token, role: 'superadmin' });
     }
+    
+    // Check normal admin credentials (LEHRER)
+    if (username === LEHRER_USERNAME && password === LEHRER_PASSWORD) {
+      const token = signToken({ role: 'admin', username }, '24h');
+      return res.json({ ok: true, token, role: 'admin' });
+    }
+    
     return res.status(401).json({ error: 'Invalid credentials' });
   } catch (e) {
     console.error('admin login error', e);
@@ -286,7 +297,7 @@ function adminMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    if (decoded.role !== 'admin' && decoded.role !== 'superadmin') return res.status(403).json({ error: 'Forbidden' });
     req.admin = decoded;
     next();
   } catch (e) {
